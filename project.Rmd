@@ -1,0 +1,13 @@
+---
+title: "Regression of building energy data"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+
+```{r}
+# write here:
+# remeber that |x| in R is abs(x) !!
+```
