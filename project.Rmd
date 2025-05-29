@@ -5,9 +5,195 @@ output:
   pdf_document: default
 ---
 
+Loading data
+
+```{r}
+data <- read.csv("Energy_Efficiency.csv")
+```
+
+## Data Overview
+
+Data consists of two responses and eight attributes:
+
+• X1 Relative Compactness
+• X2 Surface Area
+• X3 Wall Area
+• X4 Roof Area
+• X5 Overall Height
+• X6 Orientation (categorical)
+• X7 Glazing Area 
+• X8 Glazing Area Distribution (categorical)
+• y1 Heating Load
+• y2 Cooling Load
+
+Renaming the columns to make them more understandable
+
+```{r}
+colnames(data) <- c('Relative_Compactness',
+                      'Surface_Area',
+                      'Wall_Area',
+                      'Roof_Area',
+                      'Overall_Height',
+                      'Orientation',
+                      'Glazing_Area',
+                      'Glazing_Area_Distribution',
+                      'Heating_Load',
+                      'Cooling_Load')
+
+```
 
 
 ```{r}
-# write here:
-# remeber that |x| in R is abs(x) !!
+head(data)
 ```
+
+
+```{r}
+summary(data) #basic statistical properties for the data
+str(data)     #type of data and counts
+```
+
+
+Looking for Null-values in the data
+```{r}
+colSums(is.na(data))
+```
+No null-values found.
+
+
+
+## Data Visualization
+
+saving categorical predictors for plotting
+```{r}
+numerical_predictors <- c(
+  'Relative_Compactness', 'Surface_Area', 'Wall_Area', 'Roof_Area',
+  'Overall_Height', 'Glazing_Area'
+)
+
+```
+
+###Boxplots
+plotting boxplots for data
+```{r}
+boxplot(data,col="lightblue", las = 2)
+```
+We notice that there is a scaling problem with the data. This can cause the regression to prioritize certain features. 
+Solution: mean-centre the data.
+
+Looking at individual boxplots, categorical values not included
+```{r}
+
+# Creating a plotting layout for a grid (2 rows, 4 columns)
+old_par <- par(mfrow = c(2, 3), mar = c(4, 4, 3, 2) + 0.1)
+
+# Looping through each numerical column to create a boxplot
+for (col_name in numerical_predictors) {
+  boxplot(data[[col_name]],
+          main = paste(gsub("_", " ", col_name)), # Title for each plot
+          ylab = "Value", # Y-axis label
+          col = "lightblue", # Color of the boxplot
+          las = 1 # Always horizontal axis labels for values
+  )
+}
+
+par(old_par)
+```
+Also Roof Area, Relative Compactness and Glazing Area has a slight degree of skewness.  
+Solution: use a prior distribution with a marked tail.
+
+###Scatterplots
+
+Categorical values not included
+
+Scatterplots for Heat Load
+```{r}
+old_par <- par(mfrow = c(2, 3), mar = c(0, 0, 0, 0) + 3.8)
+
+
+for (predictor_col in numerical_predictors) {
+    plot(data[[predictor_col]], data[["Heating_Load"]],
+         xlab = gsub("_", " ", predictor_col),  
+         ylab = "Heating Load", 
+         main = paste("Heating Load", "vs.", gsub("_", " ", predictor_col)), # Dynamic title
+         col = "steelblue", # Point color
+         pch = 16,          # Solid circles for points
+         cex = 0.8,          # Size of points
+         ylim = c(0, max(data[["Heating_Load"]]))
+    )
+}
+
+```
+We notice highly unlinear behaviour for Relative Compactness, and Surface Area
+
+
+```{r}
+
+old_par <- par(mfrow = c(2, 3), mar = c(0, 0, 0, 0) + 3.8)
+
+for (predictor_col in numerical_predictors) {
+    plot(data[[predictor_col]], data[["Cooling_Load"]],
+         xlab = gsub("_", " ", predictor_col),  
+         ylab = "Cooling Load", 
+         main = paste("Cooling Load", "vs.", gsub("_", " ", predictor_col)), # Dynamic title
+         col = "steelblue", # Point color
+         pch = 16,          # Solid circles for points
+         cex = 0.8,          # Size of points
+         ylim = c(0, max(data[["Cooling_Load"]]))
+    )
+}
+
+
+
+```
+
+##Categorical Value Visualization
+
+Analyzing orientation
+```{r}
+orientation_counts <- table(data[["Orientation"]]) #convert dataframe to vector  
+print(orientation_counts)
+
+
+barplot(orientation_counts,
+        col = "orange",
+        main = "Distribution of Orientations (X6)",
+        xlab = "Orientation Category",
+        ylab = "Frequency",
+        xlim = c(0, 1),
+        ylim = c(0, max(orientation_counts)+100),
+        width = 0.1
+        ) 
+```
+
+Analyzing Glazing Area Distribution
+```{r}
+
+glazing_area_counts <- table(data[["Glazing_Area_Distribution"]]) #convert dataframe to vector  
+print(glazing_area_counts)
+
+barplot(glazing_area_counts,
+        col = "red",
+        main = "Distribution of Glazing Area Distribution (X8)",
+        xlab = "Orientation Category",
+        ylab = "Frequency",
+        xlim = c(0, 1),
+        ylim = c(0, max(glazing_area_counts)+100),
+        width = 0.1
+        ) 
+```
+
+##Preprocessing
+
+
+###Convert categorical values
+
+To convert categorical values, replace categorical variable with m indicator variables, where m = number of categories
+
+
+###Mean Center
+We only wish to mean center non-categorical attributes 
+
+###Split into training/test set
+
+
