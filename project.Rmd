@@ -210,7 +210,25 @@ str(data) #check for successfull transformation
 
 
 ###Mean Center
-We only wish to mean center non-categorical attributes 
+We only wish to mean center non-categorical attributes, mean centering will make the final model parameters more interpretable
+```{r}
+
+mean_center <- function(data) {
+  for(attribute in colnames(data)){
+    if(attribute == 'Orientation' || attribute == 'Glazing_Area_Distribution'){next}
+    data[attribute] <-  as.vector(scale(data[attribute])) #scale mean centers the data
+    }
+  return(data)
+}
+
+# apply it
+test <- mean_center(data)
+#head(data)
+head(test)
+
+
+```
+
 
 ###Split into training/test set
 
