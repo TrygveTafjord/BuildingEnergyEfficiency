@@ -7,6 +7,7 @@ output:
 
 ```{r}
 library(rjags)
+library(BAS)
 library("ggplot2")
 ```
 
@@ -80,7 +81,7 @@ numerical_attributes <- c(
 
 ```
 
-###Histograms
+### Histograms
 Plotting histograms for both the response variables
 ```{r}
 old_par <- par(mfrow = c(1, 2), mar = c(4, 4, 3, 2) + 0.1)
@@ -109,10 +110,49 @@ col="coral"
 
 
 ```
+### Histograms for features
+If we later want to mean-center the data, we should preferibly have normally distributed data. Furhter more, strictly possitive skewed data, we should use a log transform on. 
+IMPORTANT: USE TRANSFORMATIONS, look for the positive skewness Lecture 11, 41:38, perhaps go back a bit
+
+```{r}
+plot_feature_histograms <- function(data, exclude_cols = c("Heating_Load", "Cooling_Load")) {
+  numeric_features <- names(data)[sapply(data, is.numeric)]
+  features_to_plot <- setdiff(numeric_features, exclude_cols)
+  n_features <- length(features_to_plot)
+  
+  # Set layout
+  old_par <- par(mfrow = c(ceiling(n_features / 2), 2), mar = c(4, 4, 3, 2) + 0.1)
+
+  for (feature in features_to_plot) {
+    x <- data[[feature]]
+    # Check if strictly positive for possible log-transform
+    is_positive <- all(x > 0)
+    # Quick skew check
+    skewness_val <- if (is_positive) {
+      mean((x - mean(x))^3) / sd(x)^3
+    } else {
+      NA
+    }
+
+    hist(x,
+         main = paste0(feature, 
+                       if (!is.na(skewness_val) && skewness_val > 1) " (Consider log)" else ""),
+         xlab = feature,
+         ylab = "Frequency",
+         col = "skyblue",
+         border = "white")
+  }
+
+  par(old_par)
+}
+
+plot_feature_histograms(data)
+
+```
+As seen in the data, it is not neccesary to per
 
 
-
-###Boxplots
+### Boxplots
 plotting boxplots for data
 ```{r}
 boxplot(data,col="lightblue", las = 2)
@@ -141,7 +181,7 @@ par(old_par)
 Also Roof Area, Relative Compactness and Glazing Area has a slight degree of skewness.  
 Solution: use a prior distribution with a marked tail.
 
-###Scatterplots
+### Scatterplots
 
 Categorical attributes not included
 
@@ -187,7 +227,7 @@ for (predictor_col in numerical_attributes) {
 ```
 
 
-##Categorical Value Visualization
+## Categorical Value Visualization
 
 Analyzing orientation
 ```{r}
@@ -223,10 +263,10 @@ barplot(glazing_area_counts,
         ) 
 ```
 
-##Preprocessing
+## Preprocessing
 
 
-###Convert categorical attributes
+### Convert categorical attributes
 
 To convert categorical attributes, replace categorical attributes with m-1 indicator attributes, where m = number of categories. One variable must be removed in order for X to be invertable
 This can be automatically done with the as.factor function, https://www.rdocumentation.org/packages/h2o/versions/2.4.3.11/topics/as.factor
@@ -248,8 +288,11 @@ data <- transform_categorical_attributes(data)
 ```
 
 
-###Mean Center
-We only wish to mean center non-categorical attributes, mean centering will make the final model parameters more interpretative
+### Mean Center
+We only wish to mean center non-categorical attributes, mean centering will make the final model parameters more interpretative. 
+
+NOTE: This is only good to do if the features are normally distributed
+NOTE: If the test data is very different from our training-data, our mean-center scales might be wrong.  
 ```{r}
 
 mean_center <- function(data) {
@@ -265,7 +308,7 @@ data <- mean_center(data)
 ```
 
 
-###Split into training/test set
+### Split into training/test set
 ```{r}
 set.seed(42)
 
@@ -286,7 +329,7 @@ y_test <- as.matrix(test["Heating_Load"])
 
 ```
 
-##Model Selection
+## Model Selection
 
 
 The goal of this sections is to perform linear regression in the Bayesian framework. The linear model is given by:
@@ -313,7 +356,7 @@ $$
 $$
 The objective of the analysis is to find good prior distributions.
 
-###Conjugate prior
+### Conjugate prior
 Conjugate priors have posteriors that can be easily calculated without simulation. However, there are many hyperparameters to tune. The prior distribution is the following:
 $$
 \beta|\sigma^2 \sim \mathcal{N}_{k+1}(\tilde{\beta}, \sigma^2 M^{-1}),
@@ -324,7 +367,7 @@ $$
 $$
 The hyperparameters to tune are $a$, $b$ and $M$ where $M$ is a $(k-1)(k-1)$ matrix and $k$ is the number of attributes in the dataset.   
 
-####Arbitrary values for hyper parameters
+#### Arbitrary values for hyper parameters
 
 Testing a model with no information on the prior. Using $$M = I_{k+1}/c$$ to reduce the number of hyperparameters. Using large values on diagonal (imply high variance) to force the learning to come from the data 
 
@@ -354,7 +397,33 @@ b_post    <- b + s2/2 + 1/2* (t(beta_post_cm-beta_hat) %*% solve(solve(M) + solv
 
 ```
 
+Analyzing the beta coefficients to see what coefficients are relevant for the response
+```{r}
+
+print_beta <- function(beta_vector, names = NULL) {
+  beta_values <- as.vector(beta_vector)  # Ensure it's a numeric vector
+  
+  # Use provided names or default to "Beta_1", "Beta_2", ...
+  if (is.null(names)) {
+    names <- paste0("Beta_", seq_along(beta_values))
+  }
+
+  for (i in seq_along(beta_values)) {
+    cat(names[i], ": ", round(beta_values[i], 4), "\n")
+  }
+}
+
+print_beta(beta_post_cm)
+```
+Sicne the data is mean centeres, it is evident that Beta_1 or Relative Compactness. 
+
+
 ### Testing Conjugate Model
+
+
+
+### Conjugate prior
+
 
 ```{r}
 predictions_conjugate_model <- X_test %*% beta_post_cm
@@ -362,7 +431,7 @@ predictions_conjugate_model <- X_test %*% beta_post_cm
 ```
 
 
-###Results
+### Results
 using Mean Square Error to see results
 ```{r}
 mse <- mean((y_test - predictions_conjugate_model)^2)
@@ -370,8 +439,41 @@ cat("Test MSE:", mse, "\n")
 
 ```
 
-##Model Testing
+
+
+### g-prior (Zellners), fitting a hierarchy of nested models 
+
+```{r}
+alphapar = 30 #More info on selecting alpha will be presented later
+
+cog.bas = bas.lm(
+  formula = Heating_Load ~ Relative_Compactness + Surface_Area + Wall_Area + Roof_Area + Overall_Height + Orientation + Glazing_Area + Glazing_Area_Distribution,
+  data = train,
+  prior = "g-prior",
+  alpha = alphapar, #hyperparameter for g-prior
+  modelprior = Bernoulli(1), #Modelprior is bernoulli(1) 
+  include.always = ~ .,      #Include all the predictors
+  n.models = 1               #number of models
+)
+
+beta = coef(cog.bas)
+print(beta)
+
+```
+```{r}
+confint(beta)
+
+```
+
+![List of things to do](toDo.png)
+#Notes to Self, IMPORTANT!!!:
+If you know that a feature is allays positive, ex. price, use the logarithm of price instead. 
+
+
+## Model Testing
 All models are trained on the same training-set, and a 80/20 split is used for training and test set validation. 
+
+
 
 
 
